@@ -279,7 +279,7 @@ def jalankan_bot(file_excel, id_user, log_callback, stats_callback, on_finish_ca
 class AppGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("BPJS TERMINAL v1.0")
+        self.root.title("Aplikasi Penghitung Pengeluaran selama 10 tahun")
         self.root.geometry("600x550")
         self.root.configure(bg=BG_COLOR)
         
@@ -362,7 +362,8 @@ class AppGUI:
             self.id_aktif = id_input
             self.frame_login.pack_forget()
             self.frame_kontrol.pack(fill="both", expand=True)
-            self.lbl_info.config(text=f"CONNECTED: {self.id_aktif} | QUOTA: {pesan}")
+            # ID dihilangkan, diganti dengan teks status yang lebih keren ala hacker
+            self.lbl_info.config(text=f"STATUS: AUTHORIZED | ACTIVE QUOTA: {pesan}") 
             self.print_log(">>> SECURE CONNECTION ESTABLISHED <<<")
         else:
             messagebox.showerror("ACCESS DENIED", pesan)

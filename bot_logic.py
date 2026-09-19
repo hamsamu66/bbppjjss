@@ -9,7 +9,7 @@ import threading
 import ddddocr
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-FIREBASE_URL = "https://PROJECT-KAMU-rtdb.firebaseio.com/lisensi_pengguna" # GANTI DENGAN URL FIREBASE KAMU
+FIREBASE_URL = "https://bbppjjss-default-rtdb.asia-southeast1.firebasedatabase.app/lisensi_pengguna" # GANTI DENGAN URL FIREBASE KAMU
 
 # ==========================================
 # KONFIGURASI TEMA HACKER / RETRO

@@ -1,0 +1,6 @@
+{
+    "logic_version": "1.0",
+    "logic_url": "https://raw.githubusercontent.com/USERNAME/REPO/main/bot_logic.py",
+    "template_version": "1.0",
+    "template_url": "https://raw.githubusercontent.com/USERNAME/REPO/main/Template_Skrining.xlsx"
+}

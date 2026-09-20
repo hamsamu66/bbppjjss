@@ -226,18 +226,29 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     }
                     else if (raceResult === 'POPUP') {
                         const msg = await page.innerText('.bootbox-body');
-                        // Hanya gunakan satu selector yang paling spesifik
-                        const btnOk = page.locator('button[data-bb-handler="OK"]');
 
-                        // 1. Wajib tunggu sampai animasi pop-up selesai dan tombol stabil
-                        await btnOk.waitFor({ state: 'visible', timeout: 5000 });
+                        // 1. Eksekusi klik langsung dari dalam DOM Browser (Bypass event listener Playwright)
+                        await page.evaluate(() => {
+                            // Coba klik pakai jQuery bawaan web BPJS jika ada
+                            if (typeof $ !== 'undefined' && $('button[data-bb-handler="ok"]').length) {
+                                $('button[data-bb-handler="ok"]').trigger('click');
+                            } else {
+                                // Klik murni via HTML DOM
+                                const btn = document.querySelector('button[data-bb-handler="ok"]');
+                                if (btn) btn.click();
+                            }
 
-                        // 2. Simulasi klik 2x manual dengan jeda 300ms agar event listener website merespons
-                        await btnOk.click({ force: true });
-                        await page.waitForTimeout(300);
-                        await btnOk.click({ force: true });
+                            // Paksa tutup semua modal Bootbox jika event klik tetap macet
+                            if (typeof bootbox !== 'undefined') {
+                                bootbox.hideAll();
+                            }
+                        });
 
-                        // 3. Lanjutkan logika bawaan
+                        // 2. Backup: Tekan Enter untuk menutup modal yang sedang aktif
+                        await page.keyboard.press('Enter');
+                        await page.waitForTimeout(1000);
+
+                        // 3. Logika deteksi pesan seperti biasa
                         if (msg.toLowerCase().includes('captcha')) {
                             console.log("[!] Captcha Salah! Me-reload otomatis...");
                             await page.click('#AppCaptcha_ReloadLink', { force: true });
@@ -254,6 +265,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                             await page.click('button[data-bb-handler="confirm"]', { force: true });
                             captchaLolos = true;
                         }
+
 
                     } else {
                         console.log("[?] Response lambat, refresh captcha...");

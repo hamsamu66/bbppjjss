@@ -48,20 +48,10 @@ class OcrSolver {
 // Inisialisasi satu solver agar model ddddocr hanya di-load sekali
 const ocr = new OcrSolver();
 
-// ==========================================
-// FUNGSI BANTUAN (Pastikan isi fungsi ini sesuai dengan milikmu sebelumnya)
-// ==========================================
-async function cekDanPotongKuota(id) {
-    // Logika Firebase milikmu
-    return { izin: true, sisa: 99 };
-}
 
 
 
-function hitungRataRataBbTb(tglLahir) {
-    // Logika hitung umur otomatis milikmu
-    return { bb: 60, tb: 160 };
-}
+
 
 // ==========================================
 // 1. AMBIL VARIABEL DARI ELECTRON
@@ -207,7 +197,16 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     else if (raceResult === 'POPUP') {
                         const msg = await page.innerText('.bootbox-body');
                         const btnOk = page.locator('button[data-bb-handler="ok"], .bootbox-accept');
-                        if (await btnOk.isVisible()) await btnOk.click({ force: true });
+
+                        // Ubah bagian ini menggunakan dblclick atau clickCount
+                        if (await btnOk.isVisible()) {
+                            // Menggunakan method double click bawaan:
+                            await btnOk.dblclick({ force: true });
+
+                            // Catatan: Jika dblclick() dirasa kurang cocok dengan website-nya, 
+                            // Anda bisa memakai alternatif ini:
+                            // await btnOk.click({ clickCount: 2, force: true });
+                        }
 
                         if (msg.toLowerCase().includes('captcha')) {
                             console.log("[!] Captcha Salah! Me-reload otomatis...");

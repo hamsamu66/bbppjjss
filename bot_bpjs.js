@@ -226,18 +226,18 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     }
                     else if (raceResult === 'POPUP') {
                         const msg = await page.innerText('.bootbox-body');
-                        const btnOk = page.locator('button[data-bb-handler="ok"], .bootbox-accept');
+                        // Hanya gunakan satu selector yang paling spesifik
+                        const btnOk = page.locator('button[data-bb-handler="ok"]');
 
-                        // Ubah bagian ini menggunakan dblclick atau clickCount
-                        if (await btnOk.isVisible()) {
-                            // Menggunakan method double click bawaan:
-                            await btnOk.dblclick({ force: true });
+                        // 1. Wajib tunggu sampai animasi pop-up selesai dan tombol stabil
+                        await btnOk.waitFor({ state: 'visible', timeout: 5000 });
 
-                            // Catatan: Jika dblclick() dirasa kurang cocok dengan website-nya, 
-                            // Anda bisa memakai alternatif ini:
-                            // await btnOk.click({ clickCount: 2, force: true });
-                        }
+                        // 2. Simulasi klik 2x manual dengan jeda 300ms agar event listener website merespons
+                        await btnOk.click({ force: true });
+                        await page.waitForTimeout(300);
+                        await btnOk.click({ force: true });
 
+                        // 3. Lanjutkan logika bawaan
                         if (msg.toLowerCase().includes('captcha')) {
                             console.log("[!] Captcha Salah! Me-reload otomatis...");
                             await page.click('#AppCaptcha_ReloadLink', { force: true });
@@ -254,6 +254,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                             await page.click('button[data-bb-handler="confirm"]', { force: true });
                             captchaLolos = true;
                         }
+
                     } else {
                         console.log("[?] Response lambat, refresh captcha...");
                         await page.click('#AppCaptcha_ReloadLink', { force: true });

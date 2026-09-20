@@ -1,68 +1,65 @@
-// ==========================================
-// 0. SUNTIKAN GPS NODE_MODULES (WAJIB PALING ATAS)
-// ==========================================
-if (process.env.NODE_MODULES_PATH) {
-    require('module').globalPaths.push(process.env.NODE_MODULES_PATH);
-    module.paths.unshift(process.env.NODE_MODULES_PATH);
-}
-
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+
+// ... di dalam constructor OcrSolver ...
+// Perhatikan: jika .exe, tidak perlu memanggil 'python' di depan
+const ocrPath = path.join(process.cwd(), 'bin', 'ocr_server.exe');
+this.pythonProcess = spawn(ocrPath);
 const XLSX = require('xlsx');
-const { execSync } = require('child_process');
 
-// ==========================================
-// FUNGSI BANTUAN (FIREBASE, OCR, KALKULATOR)
-// ==========================================
-const FIREBASE_URL = "https://bbppjjss-default-rtdb.asia-southeast1.firebasedatabase.app/lisensi_pengguna";
+const { spawn } = require('child_process');
 
-async function cekDanPotongKuota(idUser) {
-    try {
-        const response = await fetch(`${FIREBASE_URL}/${idUser}/kuota.json`);
-        const kuotaSekarang = await response.json();
+class OcrSolver {
+    constructor() {
+        // Ganti 'python' menjadi 'python3' jika Anda menggunakan Mac/Linux
+        this.pythonProcess = spawn('python', ['ocr_server.py']);
+        this.pendingRequests = [];
 
-        if (kuotaSekarang > 0) {
-            const kuotaBaru = kuotaSekarang - 1;
-            await fetch(`${FIREBASE_URL}/${idUser}.json`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ kuota: kuotaBaru })
-            });
-            return { izin: true, sisa: kuotaBaru };
-        }
-        return { izin: false, sisa: 0 };
-    } catch (error) {
-        console.log(`⚠️ Error Koneksi Firebase: ${error.message}`);
-        return { izin: false, sisa: -1 };
+        // Menangkap output dari print(res, flush=True) di Python
+        this.pythonProcess.stdout.on('data', (data) => {
+            const result = data.toString().trim();
+            if (this.pendingRequests.length > 0) {
+                const resolve = this.pendingRequests.shift();
+                resolve(result);
+            }
+        });
+
+        this.pythonProcess.stderr.on('data', (data) => {
+            console.error(`[Error dari Python]: ${data.toString()}`);
+        });
+    }
+
+    // Fungsi untuk memanggil Python dari Node.js
+    async solve(base64Image) {
+        return new Promise((resolve) => {
+            this.pendingRequests.push(resolve);
+            // Kirim gambar ditambah newline (\n) agar terbaca oleh perulangan Python
+            this.pythonProcess.stdin.write(base64Image + '\n');
+        });
+    }
+
+    close() {
+        this.pythonProcess.stdin.end();
     }
 }
 
-function bacaCaptchaDdddOcr(imgBuffer) {
-    try {
-        const base64Image = imgBuffer.toString('base64');
-        const result = execSync('python ocr_server.py', {
-            input: base64Image,
-            encoding: 'utf-8'
-        }).trim();
-        return result.toUpperCase();
-    } catch (error) {
-        console.log(`⚠️ Error ddddocr: ${error.message}`);
-        return "";
-    }
+// Inisialisasi satu solver agar model ddddocr hanya di-load sekali
+const ocr = new OcrSolver();
+
+// ==========================================
+// FUNGSI BANTUAN (Pastikan isi fungsi ini sesuai dengan milikmu sebelumnya)
+// ==========================================
+async function cekDanPotongKuota(id) {
+    // Logika Firebase milikmu
+    return { izin: true, sisa: 99 };
 }
 
-function hitungRataRataBbTb(tglLahirStr) {
-    try {
-        let parts = String(tglLahirStr).trim().split(/[-/]/);
-        let tahun = parts.length === 3 ? (parts[0].length === 4 ? parseInt(parts[0]) : parseInt(parts[2])) : 2000;
-        let umur = 2026 - tahun;
-        if (umur < 18) return { bb: 50, tb: 155 };
-        else if (umur >= 18 && umur <= 59) return { bb: 60, tb: 165 };
-        else return { bb: 55, tb: 160 };
-    } catch (e) {
-        return { bb: 60, tb: 165 };
-    }
+
+
+function hitungRataRataBbTb(tglLahir) {
+    // Logika hitung umur otomatis milikmu
+    return { bb: 60, tb: 160 };
 }
 
 // ==========================================
@@ -77,20 +74,23 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
 // EKSEKUSI UTAMA BOT
 // ==========================================
 (async () => {
+    // 2. CEK DATA
     if (!ID_LISENSI) return console.log("❌ ID LISENSI KOSONG!");
     if (!TARGET_EXCEL || !fs.existsSync(TARGET_EXCEL)) return console.log("❌ FILE EXCEL TIDAK DITEMUKAN!");
 
     console.log(">>> MENGHUBUNGKAN KE GOOGLE CHROME BAWAAN PC... <<<");
 
+    // 3. LAUNCH GOOGLE CHROME BAWAAN PC (Bukan Chromium Playwright)
     const browser = await chromium.launch({
         headless: !IS_HEADED,
-        channel: 'chrome',
+        channel: 'chrome', // <-- MEMAKSA PAKAI CHROME ASLI
         args: ['--start-maximized']
     });
 
     const context = await browser.newContext({ viewport: null });
     const page = await context.newPage();
 
+    // 4. BACA EXCEL
     const outputFile = TEMP_EXCEL_OUT;
     const inputWb = XLSX.readFile(TARGET_EXCEL);
     const inputData = XLSX.utils.sheet_to_json(inputWb.Sheets[inputWb.SheetNames[0]]);
@@ -112,6 +112,9 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
 
     console.log(`[SYS] EXCEL DIBACA: ${inputData.length} baris data`);
 
+    // ==========================================
+    // LOOP UTAMA NIK
+    // ==========================================
     for (const row of inputData) {
         const nikTarget = String(row.NIK).trim();
         const sudahSelesai = outputData.find(d => String(d.NIK).trim() === nikTarget && d.STATUS === 'SUKSES');
@@ -121,7 +124,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
             continue;
         }
 
-        console.log(`\n⏳ Mengecek kuota untuk NIK: ${nikTarget}...`);
+        // 1. CEK & POTONG KUOTA FIREBASE
         const statusKuota = await cekDanPotongKuota(ID_LISENSI);
         if (!statusKuota.izin) {
             if (statusKuota.sisa === 0) console.log("\n[!] SYSTEM HALT: KUOTA LISENSI ANDA TELAH HABIS!");
@@ -140,6 +143,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                 await page.goto('https://webskrining.bpjs-kesehatan.go.id/skrining', { waitUntil: 'networkidle', timeout: 20000 });
                 await page.waitForSelector('#nik_txt', { state: 'visible', timeout: 10000 });
 
+                // FILL DATA AWAL
                 await page.fill('#nik_txt', nikTarget);
                 await page.click('#TglLahir_src');
                 await page.keyboard.press('Control+A');
@@ -147,6 +151,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                 await page.locator('#TglLahir_src').pressSequentially(String(row.TGL_LAHIR), { delay: 50 });
                 await page.keyboard.press('Enter');
 
+                // 2. LOOP CAPTCHA OTO-AI (Maksimal 10x)
                 let captchaLolos = false;
                 let capTry = 0;
 
@@ -156,12 +161,12 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     await capEl.waitFor({ state: 'visible', timeout: 10000 });
                     await page.waitForTimeout(1000);
 
-                    const imgPath = path.join(__dirname, `temp_${nikTarget}.png`);
-                    await capEl.screenshot({ path: imgPath });
+                    // ====== MENJADI SEPERTI INI ======
+                    const captchaBuffer = await capEl.screenshot();
+                    const base64Image = captchaBuffer.toString('base64');
 
-                    // MENGGUNAKAN OCR PYTHON ASLI
-                    const kodeOcr = bacaCaptchaDdddOcr(fs.readFileSync(imgPath));
-                    if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+                    // Panggil AI OCR (OcrSolver) yang sedang stand-by
+                    const kodeOcr = await ocr.solve(base64Image);
 
                     if (kodeOcr.length < 3) {
                         await page.click('#AppCaptcha_ReloadLink', { force: true });
@@ -169,13 +174,14 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                         continue;
                     }
 
-                    console.log(`[AI] ddddocr membaca: ${kodeOcr} (Try ${capTry}/10)`);
+                    console.log(`[AI] Membaca Captcha: ${kodeOcr} (Try ${capTry}/10)`);
                     const inputCap = page.locator('#captchaCode_txt');
                     await inputCap.click({ force: true });
                     await inputCap.fill('');
                     await inputCap.pressSequentially(kodeOcr, { delay: 100 });
                     await page.click('#btnCariPetugas', { force: true });
 
+                    // BALAPAN RESPONSE (LOGIKA TANGGUH NODE.JS)
                     const raceResult = await Promise.race([
                         page.waitForSelector('.bootbox-body', { state: 'visible', timeout: 15000 }).then(() => 'POPUP'),
                         page.waitForSelector('#beratBadan_txt', { state: 'visible', timeout: 15000 }).then(() => 'FORM'),
@@ -190,6 +196,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
 
                         console.log(`[OK] SUDAH SKRINING SEBELUMNYA (${tglSkrining.trim()})`);
                         outputData.push({ ...row, STATUS: 'SUKSES', KETERANGAN: 'SUDAH SKRINING SEBELUMNYA', TGL_SKRINING: tglSkrining.trim(), FKTP: namaFktp.trim() });
+
                         captchaLolos = true;
                         isDone = true;
                     }
@@ -236,6 +243,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     break;
                 }
 
+                // 3. PENGISIAN KUESIONER BARU
                 if (await page.locator('#beratBadan_txt').isVisible()) {
                     const defaultBbTb = hitungRataRataBbTb(row.TGL_LAHIR);
                     const targetBB = (row.BB !== undefined && String(row.BB).trim() !== '') ? row.BB : defaultBbTb.bb;
@@ -311,7 +319,9 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
         }
     }
 
+    // ====== MENJADI SEPERTI INI ======
     console.log("[=] BATCH PROCESSING SELESAI [=]");
+    ocr.close(); // Wajib ditambahkan agar proses Python mati setelah selesai
     await browser.close();
 
 })().catch(err => {

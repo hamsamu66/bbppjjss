@@ -226,46 +226,42 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     }
                     else if (raceResult === 'POPUP') {
                         const msg = await page.innerText('.bootbox-body');
+                        const lowerMsg = msg.toLowerCase();
 
-                        // 1. Eksekusi klik langsung dari dalam DOM Browser (Bypass event listener Playwright)
-                        await page.evaluate(() => {
-                            // Coba klik pakai jQuery bawaan web BPJS jika ada
-                            if (typeof $ !== 'undefined' && $('button[data-bb-handler="ok"]').length) {
-                                $('button[data-bb-handler="ok"]').trigger('click');
-                            } else {
-                                // Klik murni via HTML DOM
-                                const btn = document.querySelector('button[data-bb-handler="ok"]');
-                                if (btn) btn.click();
-                            }
-
-                            // Paksa tutup semua modal Bootbox jika event klik tetap macet
-                            if (typeof bootbox !== 'undefined') {
-                                bootbox.hideAll();
-                            }
-                        });
-
-                        // 2. Backup: Tekan Enter untuk menutup modal yang sedang aktif
-                        await page.keyboard.press('Enter');
-                        await page.waitForTimeout(1000);
-
-                        // 3. Logika deteksi pesan seperti biasa
-                        if (msg.toLowerCase().includes('captcha')) {
+                        if (lowerMsg.includes('captcha')) {
                             console.log("[!] Captcha Salah! Me-reload otomatis...");
+                            // Tutup popup captcha dengan tombol OK miliknya sendiri (bukan hideAll)
+                            await page.click('button[data-bb-handler="ok"]', { force: true }).catch(() => { });
                             await page.click('#AppCaptcha_ReloadLink', { force: true });
                             await page.waitForTimeout(1500);
                         }
-                        else if (msg.toLowerCase().includes('bukan peserta jkn') || msg.toLowerCase().includes('tanggal lahir')) {
+                        else if (lowerMsg.includes('bukan peserta jkn') || lowerMsg.includes('tanggal lahir')) {
                             console.log(`[!] Gagal: ${msg.trim()}`);
                             outputData.push({ ...row, STATUS: 'GAGAL', KETERANGAN: msg.trim() });
+                            await page.click('button[data-bb-handler="ok"]', { force: true }).catch(() => { });
                             captchaLolos = true;
                             isDone = true;
                         }
-                        else if (msg.toLowerCase().includes('sadar')) {
+                        else if (lowerMsg.includes('sadar')) {
                             console.log("[+] Menyetujui Persetujuan Skrining (Sadar)");
+                            // Klik confirm dulu, sebelum ada aksi lain yang menghapus modal
                             await page.click('button[data-bb-handler="confirm"]', { force: true });
                             captchaLolos = true;
                         }
-
+                        else {
+                            // Fallback untuk popup lain yang belum dikenali
+                            await page.evaluate(() => {
+                                if (typeof $ !== 'undefined' && $('button[data-bb-handler="ok"]').length) {
+                                    $('button[data-bb-handler="ok"]').trigger('click');
+                                } else {
+                                    const btn = document.querySelector('button[data-bb-handler="ok"]');
+                                    if (btn) btn.click();
+                                }
+                                if (typeof bootbox !== 'undefined') bootbox.hideAll();
+                            });
+                            await page.keyboard.press('Enter');
+                            await page.waitForTimeout(1000);
+                        }
 
                     } else {
                         console.log("[?] Response lambat, refresh captcha...");

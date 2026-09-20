@@ -228,39 +228,52 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                         const msg = await page.innerText('.bootbox-body');
                         const lowerMsg = msg.toLowerCase();
 
+                        // Coba klik OK maksimal 3x sampai popup benar-benar hilang
+                        for (let i = 0; i < 3; i++) {
+                            await page.locator('.bootbox:visible button[data-bb-handler="ok"]')
+                                .click({ force: true })
+                                .catch(async () => {
+                                    await page.evaluate(() => {
+                                        const btn = document.querySelector(
+                                            '.bootbox:visible button[data-bb-handler="ok"]'
+                                        );
+                                        if (btn) btn.click();
+                                    }).catch(() => { });
+                                });
+
+                            await page.waitForTimeout(500);
+
+                            if (await page.locator('.bootbox:visible').count() === 0) break;
+                        }
+
+                        // Kalau masih terbuka, coba Enter sekali
+                        if (await page.locator('.bootbox:visible').count()) {
+                            await page.keyboard.press('Enter');
+                            await page.waitForTimeout(700);
+                        }
+
+                        // Proses pesan
                         if (lowerMsg.includes('captcha')) {
                             console.log("[!] Captcha Salah! Me-reload otomatis...");
-                            // Tutup popup captcha dengan tombol OK miliknya sendiri (bukan hideAll)
-                            await page.click('button[data-bb-handler="ok"]', { force: true }).catch(() => { });
                             await page.click('#AppCaptcha_ReloadLink', { force: true });
                             await page.waitForTimeout(1500);
-                        }
-                        else if (lowerMsg.includes('bukan peserta jkn') || lowerMsg.includes('tanggal lahir')) {
+
+                        } else if (
+                            lowerMsg.includes('bukan peserta jkn') ||
+                            lowerMsg.includes('tanggal lahir')
+                        ) {
                             console.log(`[!] Gagal: ${msg.trim()}`);
                             outputData.push({ ...row, STATUS: 'GAGAL', KETERANGAN: msg.trim() });
-                            await page.click('button[data-bb-handler="ok"]', { force: true }).catch(() => { });
                             captchaLolos = true;
                             isDone = true;
-                        }
-                        else if (lowerMsg.includes('sadar')) {
+
+                        } else if (lowerMsg.includes('sadar')) {
                             console.log("[+] Menyetujui Persetujuan Skrining (Sadar)");
-                            // Klik confirm dulu, sebelum ada aksi lain yang menghapus modal
-                            await page.click('button[data-bb-handler="confirm"]', { force: true });
+                            await page.click(
+                                '.bootbox:visible button[data-bb-handler="confirm"]',
+                                { force: true }
+                            );
                             captchaLolos = true;
-                        }
-                        else {
-                            // Fallback untuk popup lain yang belum dikenali
-                            await page.evaluate(() => {
-                                if (typeof $ !== 'undefined' && $('button[data-bb-handler="ok"]').length) {
-                                    $('button[data-bb-handler="ok"]').trigger('click');
-                                } else {
-                                    const btn = document.querySelector('button[data-bb-handler="ok"]');
-                                    if (btn) btn.click();
-                                }
-                                if (typeof bootbox !== 'undefined') bootbox.hideAll();
-                            });
-                            await page.keyboard.press('Enter');
-                            await page.waitForTimeout(1000);
                         }
 
                     } else {

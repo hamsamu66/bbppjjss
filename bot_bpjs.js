@@ -1,23 +1,28 @@
+// ==========================================
+// 0. SUNTIKAN GPS NODE_MODULES (WAJIB PALING ATAS)
+// ==========================================
+if (process.env.NODE_MODULES_PATH) {
+    require('module').globalPaths.push(process.env.NODE_MODULES_PATH);
+    module.paths.unshift(process.env.NODE_MODULES_PATH);
+}
+
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
 
 // ==========================================
-// FUNGSI BANTUAN (Pastikan isi fungsi ini sesuai dengan milikmu sebelumnya)
+// FUNGSI BANTUAN
 // ==========================================
 async function cekDanPotongKuota(id) {
-    // Logika Firebase milikmu
     return { izin: true, sisa: 99 };
 }
 
 function bacaCaptchaDdddOcr(bufferImg) {
-    // Logika request ke ocr_server.py milikmu
     return "1234";
 }
 
 function hitungRataRataBbTb(tglLahir) {
-    // Logika hitung umur otomatis milikmu
     return { bb: 60, tb: 160 };
 }
 
@@ -39,10 +44,10 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
 
     console.log(">>> MENGHUBUNGKAN KE GOOGLE CHROME BAWAAN PC... <<<");
 
-    // 3. LAUNCH GOOGLE CHROME BAWAAN PC (Bukan Chromium Playwright)
+    // 3. LAUNCH GOOGLE CHROME BAWAAN PC
     const browser = await chromium.launch({
         headless: !IS_HEADED,
-        channel: 'chrome', // <-- MEMAKSA PAKAI CHROME ASLI
+        channel: 'chrome',
         args: ['--start-maximized']
     });
 
@@ -83,7 +88,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
             continue;
         }
 
-        // 1. CEK & POTONG KUOTA FIREBASE
         const statusKuota = await cekDanPotongKuota(ID_LISENSI);
         if (!statusKuota.izin) {
             if (statusKuota.sisa === 0) console.log("\n[!] SYSTEM HALT: KUOTA LISENSI ANDA TELAH HABIS!");
@@ -102,7 +106,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                 await page.goto('https://webskrining.bpjs-kesehatan.go.id/skrining', { waitUntil: 'networkidle', timeout: 20000 });
                 await page.waitForSelector('#nik_txt', { state: 'visible', timeout: 10000 });
 
-                // FILL DATA AWAL
                 await page.fill('#nik_txt', nikTarget);
                 await page.click('#TglLahir_src');
                 await page.keyboard.press('Control+A');
@@ -110,7 +113,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                 await page.locator('#TglLahir_src').pressSequentially(String(row.TGL_LAHIR), { delay: 50 });
                 await page.keyboard.press('Enter');
 
-                // 2. LOOP CAPTCHA OTO-AI (Maksimal 10x)
                 let captchaLolos = false;
                 let capTry = 0;
 
@@ -123,7 +125,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     const imgPath = path.join(__dirname, `temp_${nikTarget}.png`);
                     await capEl.screenshot({ path: imgPath });
 
-                    // Panggil AI OCR
                     const kodeOcr = bacaCaptchaDdddOcr(fs.readFileSync(imgPath));
                     if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
 
@@ -140,7 +141,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     await inputCap.pressSequentially(kodeOcr, { delay: 100 });
                     await page.click('#btnCariPetugas', { force: true });
 
-                    // BALAPAN RESPONSE (LOGIKA TANGGUH NODE.JS)
                     const raceResult = await Promise.race([
                         page.waitForSelector('.bootbox-body', { state: 'visible', timeout: 15000 }).then(() => 'POPUP'),
                         page.waitForSelector('#beratBadan_txt', { state: 'visible', timeout: 15000 }).then(() => 'FORM'),
@@ -155,7 +155,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
 
                         console.log(`[OK] SUDAH SKRINING SEBELUMNYA (${tglSkrining.trim()})`);
                         outputData.push({ ...row, STATUS: 'SUKSES', KETERANGAN: 'SUDAH SKRINING SEBELUMNYA', TGL_SKRINING: tglSkrining.trim(), FKTP: namaFktp.trim() });
-
                         captchaLolos = true;
                         isDone = true;
                     }
@@ -202,7 +201,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     break;
                 }
 
-                // 3. PENGISIAN KUESIONER BARU
                 if (await page.locator('#beratBadan_txt').isVisible()) {
                     const defaultBbTb = hitungRataRataBbTb(row.TGL_LAHIR);
                     const targetBB = (row.BB !== undefined && String(row.BB).trim() !== '') ? row.BB : defaultBbTb.bb;

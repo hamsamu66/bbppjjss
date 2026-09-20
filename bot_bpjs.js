@@ -227,7 +227,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     else if (raceResult === 'POPUP') {
                         const msg = await page.innerText('.bootbox-body');
                         // Hanya gunakan satu selector yang paling spesifik
-                        const btnOk = page.locator('button[data-bb-handler="ok"]');
+                        const btnOk = page.locator('button[data-bb-handler="OK"]');
 
                         // 1. Wajib tunggu sampai animasi pop-up selesai dan tombol stabil
                         await btnOk.waitFor({ state: 'visible', timeout: 5000 });

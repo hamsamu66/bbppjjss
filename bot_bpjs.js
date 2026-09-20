@@ -10,20 +10,59 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
+const { execSync } = require('child_process');
 
 // ==========================================
-// FUNGSI BANTUAN
+// FUNGSI BANTUAN (FIREBASE, OCR, KALKULATOR)
 // ==========================================
-async function cekDanPotongKuota(id) {
-    return { izin: true, sisa: 99 };
+const FIREBASE_URL = "https://bbppjjss-default-rtdb.asia-southeast1.firebasedatabase.app/lisensi_pengguna";
+
+async function cekDanPotongKuota(idUser) {
+    try {
+        const response = await fetch(`${FIREBASE_URL}/${idUser}/kuota.json`);
+        const kuotaSekarang = await response.json();
+
+        if (kuotaSekarang > 0) {
+            const kuotaBaru = kuotaSekarang - 1;
+            await fetch(`${FIREBASE_URL}/${idUser}.json`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kuota: kuotaBaru })
+            });
+            return { izin: true, sisa: kuotaBaru };
+        }
+        return { izin: false, sisa: 0 };
+    } catch (error) {
+        console.log(`⚠️ Error Koneksi Firebase: ${error.message}`);
+        return { izin: false, sisa: -1 };
+    }
 }
 
-function bacaCaptchaDdddOcr(bufferImg) {
-    return "1234";
+function bacaCaptchaDdddOcr(imgBuffer) {
+    try {
+        const base64Image = imgBuffer.toString('base64');
+        const result = execSync('python ocr_server.py', {
+            input: base64Image,
+            encoding: 'utf-8'
+        }).trim();
+        return result.toUpperCase();
+    } catch (error) {
+        console.log(`⚠️ Error ddddocr: ${error.message}`);
+        return "";
+    }
 }
 
-function hitungRataRataBbTb(tglLahir) {
-    return { bb: 60, tb: 160 };
+function hitungRataRataBbTb(tglLahirStr) {
+    try {
+        let parts = String(tglLahirStr).trim().split(/[-/]/);
+        let tahun = parts.length === 3 ? (parts[0].length === 4 ? parseInt(parts[0]) : parseInt(parts[2])) : 2000;
+        let umur = 2026 - tahun;
+        if (umur < 18) return { bb: 50, tb: 155 };
+        else if (umur >= 18 && umur <= 59) return { bb: 60, tb: 165 };
+        else return { bb: 55, tb: 160 };
+    } catch (e) {
+        return { bb: 60, tb: 165 };
+    }
 }
 
 // ==========================================
@@ -38,13 +77,11 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
 // EKSEKUSI UTAMA BOT
 // ==========================================
 (async () => {
-    // 2. CEK DATA
     if (!ID_LISENSI) return console.log("❌ ID LISENSI KOSONG!");
     if (!TARGET_EXCEL || !fs.existsSync(TARGET_EXCEL)) return console.log("❌ FILE EXCEL TIDAK DITEMUKAN!");
 
     console.log(">>> MENGHUBUNGKAN KE GOOGLE CHROME BAWAAN PC... <<<");
 
-    // 3. LAUNCH GOOGLE CHROME BAWAAN PC
     const browser = await chromium.launch({
         headless: !IS_HEADED,
         channel: 'chrome',
@@ -54,7 +91,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
     const context = await browser.newContext({ viewport: null });
     const page = await context.newPage();
 
-    // 4. BACA EXCEL
     const outputFile = TEMP_EXCEL_OUT;
     const inputWb = XLSX.readFile(TARGET_EXCEL);
     const inputData = XLSX.utils.sheet_to_json(inputWb.Sheets[inputWb.SheetNames[0]]);
@@ -76,9 +112,6 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
 
     console.log(`[SYS] EXCEL DIBACA: ${inputData.length} baris data`);
 
-    // ==========================================
-    // LOOP UTAMA NIK
-    // ==========================================
     for (const row of inputData) {
         const nikTarget = String(row.NIK).trim();
         const sudahSelesai = outputData.find(d => String(d.NIK).trim() === nikTarget && d.STATUS === 'SUKSES');
@@ -88,6 +121,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
             continue;
         }
 
+        console.log(`\n⏳ Mengecek kuota untuk NIK: ${nikTarget}...`);
         const statusKuota = await cekDanPotongKuota(ID_LISENSI);
         if (!statusKuota.izin) {
             if (statusKuota.sisa === 0) console.log("\n[!] SYSTEM HALT: KUOTA LISENSI ANDA TELAH HABIS!");
@@ -125,6 +159,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                     const imgPath = path.join(__dirname, `temp_${nikTarget}.png`);
                     await capEl.screenshot({ path: imgPath });
 
+                    // MENGGUNAKAN OCR PYTHON ASLI
                     const kodeOcr = bacaCaptchaDdddOcr(fs.readFileSync(imgPath));
                     if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
 
@@ -134,7 +169,7 @@ const IS_HEADED = process.env.IS_HEADED === 'true';
                         continue;
                     }
 
-                    console.log(`[AI] Membaca Captcha: ${kodeOcr} (Try ${capTry}/10)`);
+                    console.log(`[AI] ddddocr membaca: ${kodeOcr} (Try ${capTry}/10)`);
                     const inputCap = page.locator('#captchaCode_txt');
                     await inputCap.click({ force: true });
                     await inputCap.fill('');

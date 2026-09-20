@@ -48,11 +48,41 @@ class OcrSolver {
 // Inisialisasi satu solver agar model ddddocr hanya di-load sekali
 const ocr = new OcrSolver();
 
+// ==========================================
+// FUNGSI CEK DAN POTONG KUOTA FIREBASE
+// ==========================================
+async function cekDanPotongKuota(idLisensi) {
+    const firebaseUrl = `https://bbppjjss-default-rtdb.asia-southeast1.firebasedatabase.app/lisensi_pengguna/${idLisensi}/kuota.json`;
 
+    try {
+        // 1. Ambil data kuota saat ini dari server
+        const responCek = await fetch(firebaseUrl);
+        let kuotaSaatIni = await responCek.json();
 
+        // Jika lisensi tidak ada atau kuota habis
+        if (kuotaSaatIni === null || kuotaSaatIni <= 0) {
+            return { izin: false, sisa: 0 };
+        }
 
+        // 2. Kurangi kuota sebanyak 1
+        const sisaBaru = kuotaSaatIni - 1;
+        const responUpdate = await fetch(firebaseUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sisaBaru)
+        });
 
-
+        // 3. Kembalikan status ke bot
+        if (responUpdate.ok) {
+            return { izin: true, sisa: sisaBaru };
+        } else {
+            return { izin: false, sisa: 0 };
+        }
+    } catch (error) {
+        console.error(`[!] Gagal memotong kuota: ${error.message}`);
+        return { izin: false, sisa: 0 };
+    }
+}
 // ==========================================
 // 1. AMBIL VARIABEL DARI ELECTRON
 // ==========================================

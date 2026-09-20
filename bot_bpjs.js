@@ -1,22 +1,21 @@
+// 1. SEMUA REQUIRE WAJIB BERADA DI PALING ATAS
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-
-// ... di dalam constructor OcrSolver ...
-// Perhatikan: jika .exe, tidak perlu memanggil 'python' di depan
-const ocrPath = path.join(process.cwd(), 'bin', 'ocr_server.exe');
-this.pythonProcess = spawn(ocrPath);
 const XLSX = require('xlsx');
+const { spawn } = require('child_process'); // <-- INI WAJIB ADA DI SINI
 
-const { spawn } = require('child_process');
-
+// 2. BARU KEMUDIAN DEKLARASI CLASS OCR
 class OcrSolver {
     constructor() {
-        // Ganti 'python' menjadi 'python3' jika Anda menggunakan Mac/Linux
-        this.pythonProcess = spawn('python', ['ocr_server.py']);
+        // Arahkan ke file .exe
+        const ocrPath = path.join(process.cwd(), 'bin', 'ocr_server.exe');
+
+        // Mengeksekusi file .exe
+        this.pythonProcess = spawn(ocrPath);
         this.pendingRequests = [];
 
-        // Menangkap output dari print(res, flush=True) di Python
+        // Menangkap output hasil tebakan OCR
         this.pythonProcess.stdout.on('data', (data) => {
             const result = data.toString().trim();
             if (this.pendingRequests.length > 0) {
@@ -26,9 +25,11 @@ class OcrSolver {
         });
 
         this.pythonProcess.stderr.on('data', (data) => {
-            console.error(`[Error dari Python]: ${data.toString()}`);
+            console.error(`[Error dari AI OCR]: ${data.toString()}`);
         });
     }
+
+    // ... (lanjutkan dengan fungsi solve() dan isi bot lainnya seperti biasa) ...
 
     // Fungsi untuk memanggil Python dari Node.js
     async solve(base64Image) {
